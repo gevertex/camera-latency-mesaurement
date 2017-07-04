@@ -1,38 +1,122 @@
-/*
-  Blink
-  Turns on an LED on for one second, then off for one second, repeatedly.
-
-  Most Arduinos have an on-board LED you can control. On the UNO, MEGA and ZERO 
-  it is attached to digital pin 13, on MKR1000 on pin 6. LED_BUILTIN is set to
-  the correct LED pin independent of which board is used.
-  If you want to know what pin the on-board LED is connected to on your Arduino model, check
-  the Technical Specs of your board  at https://www.arduino.cc/en/Main/Products
-  
-  This example code is in the public domain.
-
-  modified 8 May 2014
-  by Scott Fitzgerald
-  
-  modified 2 Sep 2016
-  by Arturo Guadalupi
-  
-  modified 8 Sep 2016
-  by Colby Newman
-*/
-
+//PIN for Red LED
 int LED_PIN = 7;
+//ADC pin for photodiode
+int ADC_PIN = 0;
+//Threshold for change required to trigger sample time calculation
+int LIGHT_DELTA_THRESHOLD = 20;
+//Time measurements above this are considered invalid
+int TIME_OUT_MS = 1000;
+
+//Bias to subtract from current sensor value.  Used to calculate delta
+int light_bias;
 
 
 // the setup function runs once when you press reset or power the board
 void setup() {
   // initialize digital pin LED_BUILTIN as an output.
   pinMode(LED_PIN, OUTPUT);
+
+  //Start serial
+  Serial.begin(115200);
+  
 }
 
 // the loop function runs over and over again forever
 void loop() {
-  digitalWrite(LED_PIN, HIGH);   // turn the LED on (HIGH is the voltage level)
-  delay(1000);                       // wait for a second
-  digitalWrite(LED_PIN, LOW);    // turn the LED off by making the voltage LOW
-  delay(1000);                       // wait for a second
+  int latencySamples = 10;
+  int currentLatency = 0;
+  unsigned long totalLatencyMs = 0;
+
+  Serial.println("Starting Measurement");
+  calibrate();
+  for (int i=0; i<latencySamples; i++){
+    totalLatencyMs += getCurrLatencyMs();
+  }
+  
+  Serial.print("average Latency: ");
+  Serial.println(String(totalLatencyMs/latencySamples));
 }
+
+//returns -1 if timed out. Returns latency if did not timeout
+int getCurrLatencyMs(){
+  int startTime = 0;
+  int endTime = 0;
+  int elapsedTime = 0;
+  int result;
+  
+  startTime = millis();
+  ledOn();
+  while (true){
+    //Determine if we timed out
+    elapsedTime = millis() - startTime; 
+    if (elapsedTime > TIME_OUT_MS){
+      result = -elapsedTime;
+      break;
+    }
+
+    //Determine if we got a valid measurement
+    if (lightDelta() > LIGHT_DELTA_THRESHOLD){
+      result = elapsedTime;
+      break;
+    }
+  }
+
+  ledOff();
+
+  if (result > 0){
+    waitLEDMeasuredOff();
+  }
+  
+  return result;
+}
+
+void waitLEDMeasuredOff(){
+  int elapsedTime;
+  int startTime = millis();
+
+  while(true){
+    elapsedTime = millis() - startTime;
+    
+    if (elapsedTime > TIME_OUT_MS){
+      break;
+    }
+
+    if (lightDelta() < LIGHT_DELTA_THRESHOLD){
+      break;
+    }
+    
+  }
+}
+
+void ledOn(){
+  digitalWrite(LED_PIN, HIGH);
+}
+
+void ledOff(){
+  digitalWrite(LED_PIN, LOW);
+}
+
+int lightDelta(){
+  int delta = analogRead(ADC_PIN) - light_bias;
+  return abs(delta);
+}
+
+void calibrate(){
+  light_bias = averageSamples(50);
+  Serial.print("Calaulated Light Bias:" );
+  Serial.println(String(light_bias));
+  Serial.print("Current Light Sensor Value: ");
+  Serial.println(analogRead(ADC_PIN));
+}
+
+int averageSamples(int samples){
+  unsigned long total = 0;
+
+  for (int i=0; i<samples; i++){
+    total += analogRead(ADC_PIN);
+    delay(10);
+  }
+
+  return total / samples;
+}
+

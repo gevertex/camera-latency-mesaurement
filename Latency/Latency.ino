@@ -26,7 +26,7 @@ void setup() {
 
 // the loop function runs over and over again forever
 void loop() {
-  int latencySamples = 5;
+  int latencySamples = 20;
   long currentLatency = 0;
   unsigned long totalLatencyUs = 0;
   unsigned long samplesMeasured = 0;
@@ -98,8 +98,8 @@ long getCurrLatencyUs(){
     }
   }
 
-  Serial.print("Delta LED On: ");
-  Serial.println(String(lightDelta()));
+//  Serial.print("Delta LED On: ");
+//  Serial.println(String(lightDelta()));
 
   ledOff();
 
@@ -109,8 +109,8 @@ long getCurrLatencyUs(){
   }
 
   waitLEDMeasuredOff();
-  Serial.print("Delta LED Off: ");
-  Serial.println(String(lightDelta()));
+//  Serial.print("Delta LED Off: ");
+//  Serial.println(String(lightDelta()));
 
 
   return result;

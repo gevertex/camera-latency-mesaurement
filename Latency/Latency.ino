@@ -1,16 +1,18 @@
 //PIN for Red LED
 int LED_PIN = 7;
-//ADC pin for photodiode
+//ADC pin for photodiode (using 1M Ohm resistor as a pull up on the circuit)
 int ADC_PIN = 0;
+
 //Threshold for change required to trigger sample time calculation
-int LIGHT_DELTA_THRESHOLD = 5;
+int LIGHT_DELTA_THRESHOLD_HIGH = -20;
+int LIGHT_DELTA_THRESHOLD_LOW = -10;
+
 //Time measurements above this are considered invalid
-unsigned long TIMEOUT_MS = 1000;
+unsigned long TIMEOUT_MS = 500;
 unsigned long TIMEOUT_US = TIMEOUT_MS * 1000;
 
 //Bias to subtract from current sensor value.  Used to calculate delta
 long light_bias;
-
 
 // the setup function runs once when you press reset or power the board
 void setup() {
@@ -24,7 +26,7 @@ void setup() {
 
 // the loop function runs over and over again forever
 void loop() {
-  int latencySamples = 20;
+  int latencySamples = 5;
   long currentLatency = 0;
   unsigned long totalLatencyUs = 0;
   unsigned long samplesMeasured = 0;
@@ -47,19 +49,24 @@ void loop() {
       samplesMeasured++;
     }
   }
+
+  unsigned long averageLatency = totalLatencyUs/samplesMeasured/1000;
+  printReport(maxLatency, minLatency, averageLatency);
+}
+
+void printReport(long maxLatency, long minLatency, long avgLatency){
+  Serial.println("");
+  Serial.println("----------------Report----------------");
   
   Serial.print("Average Latency: ");
-  if (totalLatencyUs > 0)
-    Serial.print(String(totalLatencyUs/samplesMeasured/1000));
-  else
-    Serial.print(String(totalLatencyUs));
+  Serial.print(String(avgLatency));
   Serial.println("ms");
 
-  Serial.print("Max Latency: ");
+  Serial.print("Max Latency:     ");
   Serial.print(String(maxLatency/1000));
   Serial.println("ms");
 
-  Serial.print("Min Latency: ");
+  Serial.print("Min Latency:     ");
   Serial.print(String(minLatency/1000));
   Serial.println("ms");
   
@@ -85,20 +92,25 @@ long getCurrLatencyUs(){
     }
 
     //Determine if we got a valid measurement
-    if (lightDelta() > LIGHT_DELTA_THRESHOLD){
+    if (lightDelta() < LIGHT_DELTA_THRESHOLD_HIGH){
       result = elapsedTime;
       break;
     }
   }
 
-//  Serial.print("Delta LED On: ");
-//  Serial.println(String(lightDelta()));
+  Serial.print("Delta LED On: ");
+  Serial.println(String(lightDelta()));
 
   ledOff();
 
+  //If we timed out, wait for a second with the LED off
+  if (result == -1){
+    delay(1000);
+  }
+
   waitLEDMeasuredOff();
-//  Serial.print("Delta LED Off: ");
-//  Serial.println(String(lightDelta()));
+  Serial.print("Delta LED Off: ");
+  Serial.println(String(lightDelta()));
 
 
   return result;
@@ -116,7 +128,7 @@ void waitLEDMeasuredOff(){
       break;
     }
 
-    if (lightDelta() < 1){
+    if (lightDelta() > LIGHT_DELTA_THRESHOLD_LOW){
 //      Serial.println("LED measured off");
       break;
     }
@@ -133,24 +145,32 @@ void ledOff(){
 }
 
 int lightDelta(){
-  int delta = analogRead(ADC_PIN) - light_bias;
-  return abs(delta);
+  long totalDelta = 0;
+  long samples = 30;
+  long startTime = millis();
+  for (int i=0; i<samples; i++){
+    totalDelta += analogRead(ADC_PIN) - light_bias;
+  }
+  long elapsedTime = millis() - startTime;
+//  Serial.print("Elapsed Sample Time: ");
+//  Serial.print(String(elapsedTime));
+//  Serial.println("ms");
+  return totalDelta/samples;
 }
 
 void calibrate(){
-  light_bias = averageSamples(50);
+  light_bias = averageSamples(30);
   Serial.print("Calaulated Light Bias:" );
   Serial.println(String(light_bias));
   Serial.print("Current Light Sensor Value: ");
   Serial.println(analogRead(ADC_PIN));
 }
 
-int averageSamples(long samples){
+long averageSamples(long samples){
   long total = 0;
 
   for (int i=0; i<samples; i++){
     total += analogRead(ADC_PIN);
-    delay(10);
   }
 
   return total / samples;

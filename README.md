@@ -8,8 +8,6 @@ This is an Arduino project meant to measure the max, min, and average latency of
 4. Load this onto your arduino.
 5. Read the report.
 
-![Wiring Diagram]
-(https://github.com/gevertex/camera-latency-mesaurement/blob/master/images/wiring%20diagram.png)
+![Wiring Diagram](https://github.com/gevertex/camera-latency-mesaurement/blob/master/images/wiring%20diagram.png)
 
-![Schematic]
-(https://github.com/gevertex/camera-latency-mesaurement/blob/master/images/schematic.png)
+![Schematic](https://github.com/gevertex/camera-latency-mesaurement/blob/master/images/schematic.png)

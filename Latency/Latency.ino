@@ -26,14 +26,14 @@ void setup() {
 
 // the loop function runs over and over again forever
 void loop() {
-  int latencySamples = 20;
+  int latencySamples = 30;
   long currentLatency = 0;
   unsigned long totalLatencyUs = 0;
   unsigned long samplesMeasured = 0;
   unsigned long minLatency = 100000;
   unsigned long maxLatency = 0;
 
-  calibrate();
+  calibrateBias();
   Serial.println("Starting Measurement");
   for (int i=0; i<latencySamples; i++){
     currentLatency = getCurrLatencyUs();
@@ -69,31 +69,54 @@ void printReport(long maxLatency, long minLatency, long avgLatency){
   Serial.print("Min Latency:     ");
   Serial.print(String(minLatency/1000));
   Serial.println("ms");
+
+  Serial.println("------------End Report----------------");
+  Serial.println("");
   
   delay(5000);
 }
 
 //returns -1 if timed out. Returns latency if did not timeout
 long getCurrLatencyUs(){
+  unsigned long elapsedTimeOn = 0;
+  unsigned long elapsedTimeOff = 0;
+
+  ledOn();
+  elapsedTimeOn = measuredLEDOnUs();
+  ledOff();
+  elapsedTimeOff = waitLEDMeasuredOffUs();
+//  Serial.print("Delta LED Off: ");
+//  Serial.println(String(lightDelta()));
+
+  Serial.print("Elapsed time on: ");
+  Serial.println(String(elapsedTimeOn));
+  Serial.print("Elapsed time off: ");
+  Serial.println(String(elapsedTimeOff));
+
+  if ((elapsedTimeOn != -1) && (elapsedTimeOff != -1))
+    return (elapsedTimeOn + elapsedTimeOff) / 2;
+  else
+    return -1;
+}
+
+unsigned long measuredLEDOnUs(){
   unsigned long startTime = 0;
-  unsigned long endTime = 0;
   unsigned long elapsedTime = 0;
-  long result;
   
   startTime = micros();
-  ledOn();
   while (true){
+    
     //Determine if we timed out
     elapsedTime = micros() - startTime; 
     if (elapsedTime > TIMEOUT_US){
       Serial.println("Wait led on timeout");
-      result = -1;
+      elapsedTime = -1;
       break;
     }
 
     //Determine if we got a valid measurement
+    elapsedTime = micros() - startTime;
     if (lightDelta() < LIGHT_DELTA_THRESHOLD_HIGH){
-      result = elapsedTime;
       break;
     }
   }
@@ -101,39 +124,30 @@ long getCurrLatencyUs(){
 //  Serial.print("Delta LED On: ");
 //  Serial.println(String(lightDelta()));
 
-  ledOff();
-
-  //If we timed out, wait for a second with the LED off
-  if (result == -1){
-    delay(1000);
-  }
-
-  waitLEDMeasuredOff();
-//  Serial.print("Delta LED Off: ");
-//  Serial.println(String(lightDelta()));
-
-
-  return result;
+  return elapsedTime;
 }
 
-void waitLEDMeasuredOff(){
-  unsigned long elapsedTime;
-  unsigned long startTime = millis();
+unsigned long waitLEDMeasuredOffUs(){
+  unsigned long elapsedTime = 0;
+  unsigned long startTime = micros();
 
   while(true){
-    elapsedTime = millis() - startTime;
-    
-    if (elapsedTime > TIMEOUT_MS){
+
+    elapsedTime = micros() - startTime;
+    if (elapsedTime > TIMEOUT_US){
       Serial.println("Wait led off timeout");
+      elapsedTime = -1;
       break;
     }
 
+    elapsedTime = micros() - startTime;
     if (lightDelta() > LIGHT_DELTA_THRESHOLD_LOW){
-//      Serial.println("LED measured off");
       break;
     }
     
   }
+
+  return elapsedTime;
 }
 
 void ledOn(){
@@ -144,35 +158,50 @@ void ledOff(){
   digitalWrite(LED_PIN, LOW);
 }
 
-int lightDelta(){
-  long totalDelta = 0;
-  long samples = 30;
-  long startTime = millis();
-  for (int i=0; i<samples; i++){
-    totalDelta += analogRead(ADC_PIN) - light_bias;
-  }
-  long elapsedTime = millis() - startTime;
-//  Serial.print("Elapsed Sample Time: ");
-//  Serial.print(String(elapsedTime));
-//  Serial.println("ms");
-  return totalDelta/samples;
+void calibrateThresholds(){
+  ledOn();
+  delay(500);
+  long on_level = lightDelta();
+  ledOff();
+  delay(500);
+  long off_level = lightDelta();
+
+  LIGHT_DELTA_THRESHOLD_HIGH = on_level * 80 / 100;
+  LIGHT_DELTA_THRESHOLD_LOW = on_level * 20 / 100;
+//
+//  Serial.print("High Threshold:" );
+//  Serial.println(String(LIGHT_DELTA_THRESHOLD_HIGH));
+//  Serial.print("Low Threshold:" );
+//  Serial.println(String(LIGHT_DELTA_THRESHOLD_LOW));
 }
 
-void calibrate(){
+long averageSamples(long samples, long bias=0){
+  long total = 0;
+
+  for (int i=0; i<samples; i++){
+    total += (analogRead(ADC_PIN) - bias);
+  }
+
+  return total / samples;
+}
+
+void calibrateBias(){
   light_bias = averageSamples(30);
+  calibrateThresholds();
   Serial.print("Calaulated Light Bias:" );
   Serial.println(String(light_bias));
   Serial.print("Current Light Sensor Value: ");
   Serial.println(analogRead(ADC_PIN));
 }
 
-long averageSamples(long samples){
-  long total = 0;
-
-  for (int i=0; i<samples; i++){
-    total += analogRead(ADC_PIN);
-  }
-
-  return total / samples;
+int lightDelta(){
+  long samples = 30;
+//  long startTime = millis();
+  long light_delta = averageSamples(samples, light_bias);
+//  long elapsedTime = millis() - startTime;
+//  Serial.print("Time: ");
+//  Serial.print(String(elapsedTime));
+//  Serial.println("ms");
+  return light_delta;
 }
 

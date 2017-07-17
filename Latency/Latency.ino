@@ -88,10 +88,10 @@ long getCurrLatencyUs(){
 //  Serial.print("Delta LED Off: ");
 //  Serial.println(String(lightDelta()));
 
-  Serial.print("Elapsed time on: ");
-  Serial.println(String(elapsedTimeOn));
-  Serial.print("Elapsed time off: ");
-  Serial.println(String(elapsedTimeOff));
+//  Serial.print("Elapsed time on: ");
+//  Serial.println(String(elapsedTimeOn));
+//  Serial.print("Elapsed time off: ");
+//  Serial.println(String(elapsedTimeOff));
 
   if ((elapsedTimeOn != -1) && (elapsedTimeOff != -1))
     return (elapsedTimeOn + elapsedTimeOff) / 2;
@@ -169,10 +169,10 @@ void calibrateThresholds(){
   LIGHT_DELTA_THRESHOLD_HIGH = on_level * 80 / 100;
   LIGHT_DELTA_THRESHOLD_LOW = on_level * 20 / 100;
 //
-//  Serial.print("High Threshold:" );
-//  Serial.println(String(LIGHT_DELTA_THRESHOLD_HIGH));
-//  Serial.print("Low Threshold:" );
-//  Serial.println(String(LIGHT_DELTA_THRESHOLD_LOW));
+  Serial.print("High Threshold:" );
+  Serial.println(String(LIGHT_DELTA_THRESHOLD_HIGH));
+  Serial.print("Low Threshold:" );
+  Serial.println(String(LIGHT_DELTA_THRESHOLD_LOW));
 }
 
 long averageSamples(long samples, long bias=0){

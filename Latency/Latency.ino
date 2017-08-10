@@ -1,7 +1,67 @@
-//PIN for Red LED
-int LED_PIN = 7;
+#include <Arduino.h>
+#include <TM1637Display.h>
+
+//TM1637 setup
+#define TMCLK 16
+#define TMDIO 10
+
+
+//Segment mapping
+//   A
+//  ---
+//F|   |B
+//G ---
+//E|   |C
+//  ---
+//   D
+const uint8_t SEG_ERR[] = {
+  0,                                     //Space
+  SEG_A | SEG_D | SEG_E | SEG_F | SEG_G, //E
+  SEG_A | SEG_F | SEG_E,                 //R
+  SEG_A | SEG_F | SEG_E,                 //R
+};
+
+const uint8_t SEG_DONE[] = {
+  SEG_B | SEG_C | SEG_D | SEG_E | SEG_G,           // d
+  SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F,   // O
+  SEG_C | SEG_E | SEG_G,                           // n
+  SEG_A | SEG_D | SEG_E | SEG_F | SEG_G            // E
+};
+
+//Blank display
+const uint8_t SEG_BLANK[] = {
+  0,
+  0,
+  0,
+  0
+};
+
+//  0GFEDCBA
+//0b00000000
+uint8_t ANIMATION_DATA[][4] = {
+  { 0b00000001, 0b00000001, 0b00000001, 0b00000001 },
+  { 0b00000000, 0b00000001, 0b00000001, 0b00000011 },
+  { 0b00000000, 0b00000000, 0b00000001, 0b00000111 },
+  { 0b00000000, 0b00000000, 0b00000000, 0b00001111 },
+  { 0b00000000, 0b00000000, 0b00001000, 0b00001110 },
+  { 0b00000000, 0b00001000, 0b00001000, 0b00001100 },
+  { 0b00001000, 0b00001000, 0b00001000, 0b00001000 },
+  { 0b00011000, 0b00001000, 0b00001000, 0b00000000 },
+  { 0b00111000, 0b00001000, 0b00000000, 0b00000000 },
+  { 0b00111001, 0b00000000, 0b00000000, 0b00000000 },
+  { 0b00110001, 0b00000001, 0b00000000, 0b00000000 },
+  { 0b00100001, 0b00000001, 0b00000001, 0b00000000 },
+};
+
+
+//LED and Opto pins
+#define LED_PIN 2
 //ADC pin for photodiode (using 1M Ohm resistor as a pull up on the circuit)
-int ADC_PIN = 0;
+#define ADC_PIN 0
+#define ADC_GROUND_PIN 15
+
+//Defines for operation
+TM1637Display display(TMCLK, TMDIO);
 
 //Threshold for change required to trigger sample time calculation
 int LIGHT_DELTA_THRESHOLD_HIGH = -20;
@@ -16,45 +76,54 @@ long light_bias;
 
 // the setup function runs once when you press reset or power the board
 void setup() {
+  setupDisplay();
+  animate();
+  
   // initialize digital pin LED_BUILTIN as an output.
   pinMode(LED_PIN, OUTPUT);
 
+  //Initialize ground pin for photodiode
+  pinMode(ADC_GROUND_PIN, OUTPUT);
+  digitalWrite(ADC_GROUND_PIN, LOW);
+  
   //Start serial
   Serial.begin(115200);
   
 }
 
-// the loop function runs over and over again forever
-void loop() {
-  int latencySamples = 30;
-  long currentLatency = 0;
-  unsigned long totalLatencyUs = 0;
-  unsigned long samplesMeasured = 0;
-  unsigned long minLatency = 100000;
-  unsigned long maxLatency = 0;
+void setupDisplay(){
+  display.setBrightness(7);
+//  display.setSegments(SEG_ERR);
+}
 
-  calibrateBias();
-  Serial.println("Starting Measurement");
-  for (int i=0; i<latencySamples; i++){
-    currentLatency = getCurrLatencyUs();
-   
-    Serial.print("Current Latency: ");
-    Serial.print(String(currentLatency/1000));
-    Serial.println("ms");
+void animate(){
+  int i;
 
-    if (currentLatency > 0){
-      minLatency = min(currentLatency, minLatency);
-      maxLatency = max(currentLatency, maxLatency);
-      totalLatencyUs += currentLatency;
-      samplesMeasured++;
-    }
+  for(i = 0; i < 12; i++) {
+    display.setSegments(ANIMATION_DATA[i]);
+    delay(50);
   }
+  display.setSegments(ANIMATION_DATA[0]);
+  delay(50);
 
-  unsigned long averageLatency = totalLatencyUs/samplesMeasured/1000;
-  printReport(maxLatency, minLatency, averageLatency);
+  for(i=7; i >= 0; i--){
+    display.setSegments(ANIMATION_DATA[0]);
+    display.setBrightness(i);
+    delay(100);
+//    if (i != 0) {
+//      delay(200/i);
+//    }else
+//      delay(200);
+  }
+  
+  display.setSegments(SEG_BLANK);
+  display.setBrightness(7);
 }
 
 void printReport(long maxLatency, long minLatency, long avgLatency){
+
+  display.showNumberDec(avgLatency);
+  
   Serial.println("");
   Serial.println("----------------Report----------------");
   
@@ -203,5 +272,36 @@ int lightDelta(){
 //  Serial.print(String(elapsedTime));
 //  Serial.println("ms");
   return light_delta;
+}
+
+// the loop function runs over and over again forever
+void loop() {
+  
+  int latencySamples = 30;
+  long currentLatency = 0;
+  unsigned long totalLatencyUs = 0;
+  unsigned long samplesMeasured = 0;
+  unsigned long minLatency = 100000;
+  unsigned long maxLatency = 0;
+
+  calibrateBias();
+  Serial.println("Starting Measurement");
+  for (int i=0; i<latencySamples; i++){
+    currentLatency = getCurrLatencyUs();
+   
+    Serial.print("Current Latency: ");
+    Serial.print(String(currentLatency/1000));
+    Serial.println("ms");
+
+    if (currentLatency > 0){
+      minLatency = min(currentLatency, minLatency);
+      maxLatency = max(currentLatency, maxLatency);
+      totalLatencyUs += currentLatency;
+      samplesMeasured++;
+    }
+  }
+
+  unsigned long averageLatency = totalLatencyUs/samplesMeasured/1000;
+  printReport(maxLatency, minLatency, averageLatency);
 }
 
